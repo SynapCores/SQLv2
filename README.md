@@ -192,7 +192,7 @@ The **SynapCores implementation** of SQLv2 is proprietary and separate from this
 
 ## **Acknowledgments**
 
-SQLv2 was created by **Luis B. Mata** with the support of the SynapCores engineering team and early design partners.
+SQLv2 was created by [**Luis B. Mata**](https://www.linkedin.com/in/cto-luis-mata/) with the support of the SynapCores engineering team and early design partners.
 Special thanks to the developer community for shaping the future of this open standard.
 
 ---
