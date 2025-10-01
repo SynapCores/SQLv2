@@ -162,9 +162,9 @@ The following milestones are planned for SQLv2 evolution:
 
 | Milestone                           | Status           |
 | ----------------------------------- | ---------------- |
-| Core spec publication               | ✅ Completed      |
-| Public GitHub repo launch           | ✅ Completed      |
-| Beta implementation via SynapCores  | 🚧 In progress   |
+| Core spec publication               | ✅ Completed     |
+| Public GitHub repo launch           | ✅ Completed     |
+| Beta implementation via SynapCores  | ✅ Completed     |
 | RFC submission to IETF              | Planned          |
 | Multimedia deep learning extensions | Planned          |
 | ISO SQL committee engagement        | Future milestone |
@@ -200,7 +200,6 @@ Special thanks to the developer community for shaping the future of this open st
 ## **Next Steps**
 
 * Clone this repository and read the [SQLv2Specs.md](SQLv2Specs.md) file.
-* Try the example queries in `/examples/`.
 * Submit proposals for new features under `/proposals/`.
 * Sign up for the [SynapCores beta](https://synapcores.com/early-access-beta) to experience the first implementation.
 
