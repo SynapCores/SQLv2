@@ -44,7 +44,7 @@ This specification is organized into seven parts:
 - **Part II**: Data Model and Types - Type system and schema objects
 - **Part III**: SQL Language - DDL, DML, TCL, and DCL
 - **Part IV**: Functions and Operators - Complete function reference
-- **Part V**: Advanced Features - AI/ML, backup, recipes, and integrations
+- **Part V**: Advanced Features - AI/ML, agents, memory, semantic graph, backup, and integrations
 - **Part VI**: Implementation - Architecture and APIs
 - **Part VII**: Conformance - Requirements and limitations
 
@@ -1262,6 +1262,223 @@ CLONE DATABASE source_db TO target_db;
 -- Clone table with filter
 CLONE TABLE sales TO sales_backup WHERE date > '2024-01-01';
 ```
+
+**Status:** ✅ [Implemented] | **Conformance:** [Enhanced]
+
+
+### 18. Agent Objects
+
+An **agent** is a schema object, not an application. It is declared with DDL, stored
+in the catalog, executes inside the database process, and is scheduled or triggered
+by the engine. Every run and every per-turn transcript is persisted as an ordinary
+system table, so an agent's behaviour is queryable with SELECT rather than
+reconstructed from application logs.
+
+An agent runs under a **persona** — a reusable, named binding of system prompt,
+model and response format. Personas are declared separately so several agents can
+share one voice, and so a persona can be revised without touching the agents that
+use it.
+
+#### 18.1 Persona Definition
+
+| Statement | Syntax | Description | Status |
+|-----------|--------|-------------|--------|
+| `CREATE PERSONA` | `CREATE [OR REPLACE] PERSONA <name> WITH (system_prompt='<text>' [, display_name='<text>'] [, description='<text>'] [, model='<installed model>'] [, response_type='text'\|'markdown'\|'json'\|'code'] [, tool_enabled=BOOL])` | Define a reusable agent persona | ✅ [Implemented] |
+
+`model` names a model installed in the local registry. When omitted, the persona
+inherits the engine's configured completion model, so a deployment can move between
+a local and a hosted model without editing the persona.
+
+#### 18.2 Agent Definition
+
+| Statement | Syntax | Description | Status |
+|-----------|--------|-------------|--------|
+| `CREATE AGENT` | `CREATE [OR REPLACE] AGENT <name> PERSONA '<persona>' TASK '<task>' [ON SCHEDULE '<cron>'] [ON {INSERT\|UPDATE\|DELETE} INTO <table> [WHERE <expr>] [ALLOW AGENT ORIGIN]]... [WITH (<options>)]` | Declare a durable agent | ✅ [Implemented] |
+| `ALTER AGENT` | `ALTER AGENT <name> { ENABLE \| DISABLE \| SET (<key> = <value> [, ...]) }` | Enable, disable or reconfigure | ✅ [Implemented] |
+| `DROP AGENT` | `DROP AGENT [IF EXISTS] <name>` | Remove an agent | ✅ [Implemented] |
+| `DESCRIBE AGENT` | `DESCRIBE AGENT <name>` | Report the resolved configuration | ✅ [Implemented] |
+| `WAKE AGENT` | `WAKE AGENT <name>` | Fire an agent immediately, asynchronously | ✅ [Implemented] |
+
+**Agent options (`WITH`):**
+
+| Option | Values | Meaning |
+|--------|--------|---------|
+| `max_iterations` | INT | Cap on reasoning turns in a single run |
+| `allow_writes` | BOOL | Whether the agent's tools may modify data |
+| `timeout_seconds` | INT | Wall-clock limit for one run |
+| `budget_tokens_per_day` | INT | Daily token ceiling |
+| `on_budget_exhausted` | `'pause'` \| `'fail'` | Behaviour when the ceiling is reached |
+| `memory` | `'persistent'` \| `'stateless'` | Whether runs share memory (see §19) |
+| `max_retries` | INT | Retries after a failed run |
+| `enabled` | BOOL | Whether triggers and schedules fire |
+
+**Activation.** An agent may be bound to a cron schedule, to table events, to both,
+or to neither — an agent with no binding runs only on `WAKE AGENT`. Event bindings
+accept a `WHERE` predicate so an agent fires on a subset of rows. `ALLOW AGENT
+ORIGIN` permits an agent to be activated by a write that another agent performed;
+without it, agent-originated writes do not re-trigger, which is the default because
+it prevents unbounded activation cycles.
+
+**Example:**
+```sql
+CREATE PERSONA triage_analyst WITH (
+  system_prompt = 'You triage inbound support tickets. Be terse and specific.',
+  model         = 'qwen2.5-coder:7b',
+  response_type = 'markdown'
+);
+
+CREATE AGENT ticket_triage
+  PERSONA 'triage_analyst'
+  TASK    'Classify the new ticket and set its priority.'
+  ON INSERT INTO tickets WHERE priority IS NULL
+  WITH (max_iterations = 6, allow_writes = TRUE, memory = 'stateless');
+
+-- Run it now, without waiting for an event
+WAKE AGENT ticket_triage;
+
+-- Inspect what it actually did
+SELECT run_id, status, iterations_used, exit_reason
+  FROM _system_agent_runs
+ ORDER BY started_at DESC;
+
+SELECT turn_index, role, tool_name, tool_result
+  FROM _system_agent_transcripts
+ WHERE run_id = '<run>'
+ ORDER BY turn_index;
+```
+
+#### 18.3 Inline Agent Invocation
+
+| Function | Syntax | Description | Status |
+|----------|--------|-------------|--------|
+| `AGENT_RUN` | `AGENT_RUN(persona, task [, options])` | Run an agent turn inside a query | ✅ [Implemented] |
+
+`AGENT_RUN` executes synchronously and returns the agent's answer as a value, which
+makes an agentic step composable with ordinary SQL:
+
+```sql
+SELECT id,
+       AGENT_RUN('triage_analyst', 'Summarise this ticket in one line: ' || body) AS summary
+  FROM tickets
+ WHERE created_at > CURRENT_DATE - 1;
+```
+
+**Status:** ✅ [Implemented] | **Conformance:** [Enhanced]
+
+---
+
+### 19. Persistent Memory
+
+Memory is a first-class schema object rather than a table convention rebuilt per
+application. A memory is scoped to an **identity** — the column whose value
+separates one subject's memories from another's — and the engine enforces that
+scope, so a caller cannot read across identities by omitting a predicate.
+
+Three properties distinguish this from storing embeddings in a table:
+
+1. **Conflicts resolve by authority, not recency.** A `system_of_record` source
+   outranks a verified user statement, which outranks an inference. Recency breaks
+   ties within an authority level. A retrieval layer that returns every contradictory
+   fact and lets the model choose is not equivalent.
+2. **Confidence and relevance are separate fields.** Evidence strength is not
+   retrieval score; collapsing them lets a strongly-held but irrelevant fact rank as
+   a good match.
+3. **Consolidation runs in the engine.** Episodes become durable facts on a policy,
+   with no application callback to forget.
+
+#### 19.1 Memory Definition
+
+| Statement | Syntax | Description | Status |
+|-----------|--------|-------------|--------|
+| `CREATE MEMORY` | `CREATE [OR REPLACE] MEMORY <name> [FOR AGENT <agent>] IDENTITY <field> [WITH (<options>)]` | Declare a memory | ✅ [Implemented] |
+| `DROP MEMORY` | `DROP MEMORY [IF EXISTS] <name> [CASCADE]` | Remove a memory | ✅ [Implemented] |
+
+Notable options: `episodic`, `semantic`, `temporal`, `relationships`, `provenance`
+(which layers to maintain); `consolidation` (`'AUTO'` \| `'SESSION'` \|
+`'THRESHOLD'` \| `'SCHEDULED'` \| `'MANUAL'`); `conflict_policy`
+(`'AUTHORITY_THEN_RECENCY'` \| `'LATEST_WINS'` \| `'HIGHEST_CONFIDENCE'` \|
+`'ALWAYS_FLAG'`); `singular_attributes` (attributes that hold exactly one current
+value); `sensitive_attributes`; and recall shaping via `recall_episodes`,
+`recall_facts`, `recall_token_budget` and `prompt_ready`.
+
+#### 19.2 Writing and Reading
+
+| Statement | Syntax | Description | Status |
+|-----------|--------|-------------|--------|
+| `REMEMBER` | `REMEMBER <memory> FOR <field> = <value> '<content>' [WITH (source_type, source_id, confidence, event_time, session_id, session_end, attribute, value, extract)]` | Record an episode | ✅ [Implemented] |
+| `RECALL` | `RECALL <memory> FOR <field> = <value> ABOUT '<query>' [WITH (current, history, episodes, facts, relationships, provenance, temporal, token_budget, prompt_ready, as_of, min_confidence, explain)]` | Assemble relevant memory | ✅ [Implemented] |
+| `CURRENT` | `CURRENT <memory> FOR <field> = <value> ATTRIBUTE <attribute>` | Read the accepted value of one attribute | ✅ [Implemented] |
+| `TRACE` | `TRACE <memory> FOR <field> = <value> { ATTRIBUTE <attribute> \| MEMORY '<id>' }` | Report why a value is believed | ✅ [Implemented] |
+| `SUPERSEDE` | `SUPERSEDE <memory> FOR <field> = <value> ATTRIBUTE <attribute> WITH '<new value>' [WITH (confidence, source_type, valid_from, reason)]` | Replace a value, retaining history | ✅ [Implemented] |
+| `FORGET` | `FORGET <memory> FOR <field> = <value> { ABOUT '<scope>' \| ATTRIBUTE <attribute> \| MEMORY '<id>' } [WITH (mode='delete'\|'suppress', threshold, reason)]` | Remove or suppress memory | ✅ [Implemented] |
+
+`RECALL WITH (as_of = '<timestamp>')` answers as of a point in time rather than now,
+and `TRACE` returns the provenance chain behind an accepted value — which source
+supplied it, at what confidence, and what it superseded.
+
+**Example:**
+```sql
+CREATE MEMORY assistant IDENTITY user_id
+  WITH (consolidation = 'AUTO', conflict_policy = 'AUTHORITY_THEN_RECENCY');
+
+REMEMBER assistant FOR user_id = 42 'I prefer dark mode and oat milk'
+  WITH (source_type = 'user_stated', confidence = 0.9);
+
+RECALL  assistant FOR user_id = 42 ABOUT 'what are their preferences?';
+CURRENT assistant FOR user_id = 42 ATTRIBUTE theme;    -- 'dark'
+TRACE   assistant FOR user_id = 42 ATTRIBUTE theme;    -- why we believe it
+```
+
+**Status:** ✅ [Implemented] | **Conformance:** [Enhanced]
+
+---
+
+### 20. Semantic Graph Operators
+
+These operators let a single graph pattern combine semantic recall with structural
+traversal, so vector similarity is a hop in the pattern rather than a separate query
+whose results the application must join.
+
+#### 20.1 Synthetic Similarity Edges
+
+| Operator | Syntax | Description | Status |
+|----------|--------|-------------|--------|
+| `SIMILAR_TO` | `-[:SIMILAR_TO <op> <threshold>]->` where `<op>` is `>`, `>=`, `<` or `<=` | Virtual edge between nodes whose embeddings satisfy the comparison | ✅ [Implemented] |
+
+`SIMILAR_TO` is a **synthetic edge**: it is never stored and never maintained. The
+traversal resolves it at query time through an HNSW nearest-neighbour lookup against
+the nodes' embedding property. Cosine similarity is the implicit metric, with range
+[-1, 1], so `>` and `>=` are the high-similarity filters and `<` / `<=` express
+dissimilarity. Because the edge is derived, re-embedding a node updates its
+neighbourhood on the next query with no re-linking step.
+
+Variable-length synthetic edges (`[:SIMILAR_TO*1..3]`) are not supported.
+
+#### 20.2 LLM-Judged Ranking
+
+| Function | Syntax | Description | Status |
+|----------|--------|-------------|--------|
+| `LLM_SCORE` | `LLM_SCORE(<prompt>, <value>)` | Score a row against a natural-language rubric, returning a scalar | ✅ [Implemented] |
+
+`LLM_SCORE` returns a number usable anywhere a scalar is: in `WHERE`, in `ORDER BY`,
+or projected. It is materially more expensive than a comparison operator, so a query
+should narrow with structure and similarity first and judge only the surviving rows.
+
+**Example — semantic recall, structural constraint and qualitative ranking in one
+pattern:**
+```cypher
+MATCH (seed:Complaint {id: 'CX-9001'})-[:SIMILAR_TO > 0.85]->(c:Complaint)
+MATCH (c)-[:ABOUT]->(p:Product)<-[:SUPPLIES]-(s:Supplier)
+WHERE s.audited_year = 2025
+WITH s, p, c,
+     LLM_SCORE('rate severity from 0 (cosmetic) to 1 (safety recall)', c.text) AS severity
+WHERE severity > 0.5
+RETURN s.name, p.name, c.text, severity
+ORDER BY severity DESC;
+```
+
+The vector hop supplies candidates, the structural hops apply a constraint no
+embedding encodes, and the judged score orders what survives.
 
 **Status:** ✅ [Implemented] | **Conformance:** [Enhanced]
 
