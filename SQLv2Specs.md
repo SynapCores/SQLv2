@@ -1,8 +1,21 @@
 # SYNAPCORES
  SQLv2 Standard Specification
 
-**Version 2.1 - September 2025**  
+**Version 2.2 — August 2026**  
 **Status: Official Release**
+
+Authored by **Luis Mata**. Copyright © 2025–2026 Luis Mata.
+
+Licensed under the [Creative Commons Attribution 4.0 International License][cc-by]
+(CC BY 4.0). You may share and adapt this specification, including commercially,
+provided you give appropriate credit, link to the license, and indicate whether
+changes were made. See [`NOTICE`](NOTICE) for the attribution format.
+
+The license covers this document. Independent implementations of the language it
+describes are unrestricted and require no attribution — a specification exists to
+be implemented.
+
+[cc-by]: https://creativecommons.org/licenses/by/4.0/
 
 ---
 

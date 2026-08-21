@@ -1,0 +1,37 @@
+The SQLv2 Specification
+=======================
+
+Author:    Luis Mata
+Copyright: (c) 2025-2026 Luis Mata. All rights reserved.
+License:   Creative Commons Attribution 4.0 International (CC BY 4.0)
+Canonical: https://github.com/SynapCores/SQLv2
+
+This specification defines SQLv2, an AI-native extension of standard SQL that
+brings machine learning, vector operations, graph traversal, agent execution,
+persistent memory and multimedia processing into the query language itself.
+
+ATTRIBUTION
+-----------
+
+CC BY 4.0 lets you share and adapt this specification, including commercially,
+provided you give appropriate credit, link to the license, and indicate whether
+you made changes.
+
+When redistributing, quoting at length, translating, or publishing a derivative
+specification, credit it as:
+
+    "SQLv2 Specification" by Luis Mata, licensed under CC BY 4.0.
+    https://github.com/SynapCores/SQLv2
+
+If you modified it, say so, and do not imply the author endorses your version.
+
+ON IMPLEMENTATIONS
+------------------
+
+This license covers the specification DOCUMENT. It does not restrict independent
+implementations of the language it describes, and no attribution is required to
+build one — that is deliberate. A specification exists to be implemented.
+
+Attribution is welcome from implementers and is the normal courtesy in this
+field, but the obligation under CC BY attaches to reuse of this text, not to
+software that implements it.

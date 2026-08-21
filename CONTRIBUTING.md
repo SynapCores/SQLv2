@@ -15,6 +15,21 @@ We welcome contributions from:
 
 ---
 
+## **Licensing of Contributions**
+
+This specification is licensed under [CC BY 4.0][cc-by]. By proposing a change —
+issue, pull request, or discussion text you ask to have incorporated — you agree
+your contribution is licensed under the same terms, and you confirm you have the
+right to license it that way.
+
+Authorship of the specification as a whole remains with Luis Mata. Contributors
+are credited in the change history; substantial contributions are acknowledged in
+the document.
+
+[cc-by]: https://creativecommons.org/licenses/by/4.0/
+
+---
+
 ## **How to Participate**
 
 There are four main ways you can contribute:

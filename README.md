@@ -1,5 +1,7 @@
 # **SQLv2 – The Open Standard for AI-Native Databases**
 
+[![License: CC BY 4.0](https://img.shields.io/badge/License-CC%20BY%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by/4.0/)
+
 > **SQLv2 is a next-generation standard** that unifies **traditional SQL, machine learning, vector search, generative AI, and multimedia support** into a single, cohesive query language.
 >
 > Built for the AI era, SQLv2 eliminates the complexity of stitching together multiple systems — relational databases, vector databases, ETL pipelines, and external ML services — by bringing everything natively inside SQL.
@@ -213,3 +215,14 @@ By bringing structured data, AI, and multimedia together, SQLv2 aims to do for *
 > **Join us in shaping the future of data.**
 > Start here: [github.com/synapcores/sqlv2](https://github.com/synapcores/sqlv2)
 
+---
+
+## License
+
+The SQLv2 Specification is authored by **Luis Mata** and licensed under
+[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Share it, adapt it,
+build commercial products on it — just give credit and say what you changed.
+See [`NOTICE`](NOTICE) for the attribution format and [`LICENSE`](LICENSE) for
+the full terms.
+
+Independent implementations of the language require no attribution.
